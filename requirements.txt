@@ -1,0 +1,5 @@
+nfl-data-py
+pandas
+pyarrow
+pytest
+delta-spark

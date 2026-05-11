@@ -42,6 +42,10 @@ When I ask "build X" — propose an approach first, then implement after I confi
 | Analytics | Databricks SQL |
 | Data source | nfl-data-py (Python) |
 
+## Data Conventions
+- Always use the three most recent completed NFL seasons: 2023, 2024, 2025
+- 2025 season completed February 2026
+
 ## Architecture
 
 ### Medallion Layers
