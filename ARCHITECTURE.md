@@ -2,16 +2,9 @@
 
 ## Vision
 
-A production-grade NFL analytics lakehouse on Azure Databricks that approaches 
-the analytical depth of NFL Next Gen Stats using publicly available play-by-play 
-data. The project demonstrates the full Databricks platform stack — ingestion, 
-transformation, SQL modeling, and ML tracking — while producing genuine football 
-insights that a real NFL analytics department would find useful.
+A production-grade NFL analytics lakehouse on Azure Databricks that approaches the analytical depth of NFL Next Gen Stats using publicly available play-by-play data. The project demonstrates the full Databricks platform stack — ingestion, transformation, SQL modeling, and ML tracking — while producing genuine football insights that a real NFL analytics department would find useful.
 
-The analytical ambition: NGS tracks what happened physically. This project answers 
-*why it worked* — situational efficiency, QB value above expectation, and play 
-concept prediction from pre-snap reads.
-
+The analytical ambition: NGS tracks what happened physically. This project answers *why it worked* — situational efficiency, QB value above expectation, and play concept prediction from pre-snap reads.
 ---
 
 ## Stack
@@ -107,8 +100,7 @@ One row per play. Primary source for dashboard drill-down queries.
 
 Key columns: all Silver columns minus raw NGS fields, plus human-readable labels.
 
-**Dashboard question:** In 3rd and long from Shotgun, how does QB X perform 
-under pressure vs. no pressure across coverage types?
+**Dashboard question:** In 3rd and long from Shotgun, how does QB X perform under pressure vs. no pressure across coverage types?
 
 ---
 
@@ -207,18 +199,13 @@ data-driven play concept model.
 and refine rule-based labels. Manual cluster inspection and labeling.
 
 **Phase 3 (MLflow):** XGBoost classifier trained on labeled clusters 
-to predict play concept from pre-snap features only — formation, personnel, 
-down, distance, game situation.
+to predict play concept from pre-snap features only — formation, personnel, down, distance, game situation.
 
-**Features:** `offense_formation, personnel_rb, personnel_te, personnel_wr, 
-pass_length, pass_location, run_location, down, distance_bucket, route`
+**Features:** offense_formation, personnel_rb, personnel_te, personnel_wr, pass_length, pass_location, run_location, down, distance_bucket, route
 
-**MLflow tracking:** inertia curve, silhouette score, cluster assignments, 
-classifier accuracy, confusion matrix
+**MLflow tracking:** inertia curve, silhouette score, cluster assignments, classifier accuracy, confusion matrix
 
-**Story:** "Started with a rule-based play concept taxonomy, validated it 
-with unsupervised clustering, then built a pre-snap classifier — 
-predicting what a team is likely to run before the ball is snapped."
+**Story:** "Started with a rule-based play concept taxonomy, validated it with unsupervised clustering, then built a pre-snap classifier — predicting what a team is likely to run before the ball is snapped."
 
 ---
 
@@ -277,7 +264,7 @@ was explicitly deprioritized as analytically commoditized.
 | Phase | Deliverable | Status |
 |---|---|---|
 | 1 | Repo structure, Bronze ingestion, EDA | Complete |
-| 2 | Silver transformation pipeline | In progress |
+| 2 | Silver transformation pipeline | Complete |
 | 3 | Azure + Terraform provisioning | Pending |
 | 4 | Gold dbt models | Pending |
 | 5 | Databricks SQL dashboard | Pending |

@@ -13,4 +13,4 @@ __pycache__/
 
 # Conda/pip virtual environment folders — dependencies installed locally
 env/
-venv/
+venv/"CLAUDE.md" 
