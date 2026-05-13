@@ -60,3 +60,30 @@ Running log of build sessions. Updated after every session.
 - Commit exploration notebook
 - Set up repo folder structure (infra/, src/, dbt/, tests/)
 - Write first Bronze ingestion script
+
+---
+
+## 2026-05-12
+
+### What I did
+- Designed full Silver transformation pipeline with schema-driven approach (Gold → Silver → Bronze)
+- Built `src/transforms/transform_pbp.py`: filters to run/pass, casts types, derives columns
+- Built `config/play_concept_map.py`: rule-based formation+direction → concept label taxonomy
+- Wrote full architecture document (ARCHITECTURE.md) covering all medallion layers, Gold tables, MLflow experiments
+- Provisioned Azure infrastructure via Terraform: ADLS Gen2, Databricks workspace (Premium), Serverless SQL Warehouse, Key Vault
+- Uploaded Bronze and Silver Parquet files to ADLS Gen2 via `az storage blob upload-batch`
+- Configured Unity Catalog External Location with managed identity for credential-free ADLS access
+- Verified Databricks Serverless SQL Warehouse can read Silver data from ADLS end to end
+
+### What I learned
+- Schema-driven design: design Silver to serve Gold, not just to fix Bronze — avoids rework
+- `terraform.tfvars` overrides `variables.tf` defaults — always check both when debugging
+- Azure for Students subscription has 6 vCPU regional limit and physical capacity shortages for Dv2/DSv3 in southcentralus
+- Serverless SQL Warehouses bypass Azure VM quota entirely — runs on Databricks-managed infrastructure
+- Serverless SQL Warehouses don't support `spark.conf.set` for storage credentials — Unity Catalog External Locations are required
+- Unity Catalog External Location + managed identity = credential-free, production-grade ADLS access
+- `az storage blob upload-batch --auth-mode key` is the fastest way to push local Parquet to ADLS
+
+### What's next
+- Phase 4: dbt Gold models (situational_epa, qb_efficiency, team_situational)
+- Set up dbt-databricks project and profiles.yml using deployed_outputs.md values
