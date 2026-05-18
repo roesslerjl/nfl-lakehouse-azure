@@ -13,4 +13,20 @@ __pycache__/
 
 # Conda/pip virtual environment folders — dependencies installed locally
 env/
+
 venv/"CLAUDE.md" 
+
+venv/
+
+# Terraform — state contains sensitive resource details, .terraform is provider cache
+infra/.terraform/
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/terraform.tfvars
+
+# Logs
+logs/
+dbt/nfl_lakehouse/logs/
+
+# dbt compiled output — regenerated on every run
+dbt/nfl_lakehouse/target/
