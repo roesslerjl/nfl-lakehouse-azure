@@ -87,3 +87,43 @@ Running log of build sessions. Updated after every session.
 ### What's next
 - Phase 4: dbt Gold models (situational_epa, qb_efficiency, team_situational)
 - Set up dbt-databricks project and profiles.yml using deployed_outputs.md values
+
+---
+
+## 2026-05-18 / 2026-05-19
+
+### What I did
+- Redesigned Gold layer architecture from scratch — replaced the original three-table design with a proper mart structure
+- Built full dbt project structure: staging → intermediate → marts
+- Added `stg_pbp.sql` and `sources.yml` — Silver source registration and staging translation layer
+- Built `int_plays_enriched.sql` — intermediate assembly layer deriving primary_player_name/id
+- Built `mart_plays.sql` — wide, fully denormalized play-level analytical engine
+- Built `mart_drives.sql` — drive-level aggregations with starting field position via window function
+- Built `mart_player_game.sql` and `mart_player_season.sql` — role-based player performance (passer / rusher / receiver)
+- Built `mart_team_game.sql` and `mart_team_season.sql` — combined offense + defense stats per team per game/season
+- Built full roster pipeline: `ingest_rosters.py` + `transform_rosters.py` → `dim_players.sql`
+- Installed dbt_utils package for surrogate key generation
+- Updated `dbt_project.yml` with correct model paths and per-layer materialization defaults
+- Refactored Silver transform significantly:
+  - Added human-readable column renames (RENAME_MAP) — `epa` → `expected_points_added`, `posteam` → `offense_team`, etc.
+  - Added `quarter`, `two_minute`, `red_zone` derived columns
+  - Added `fixed_drive`, `fixed_drive_result`, `yards_gained`, `receiver_player_id` to Silver schema
+  - Fixed base paths in `config/settings.py` — removed hardcoded `/pbp` so multiple data sources can share the same Bronze/Silver root
+- Documented 13 architectural decisions (ADR-006 through ADR-019) in ARCHITECTURE.md
+
+### What I learned
+- Staging layer should be a thin translation layer only — no logic, no joins, just a clean source reference
+- Intermediate layer earns its place when logic is consumed by 3+ downstream models — centralise once, not three copies
+- Season-level rates must be recomputed from raw counts, never by averaging game-level rates — a 10-play game and a 50-play game would be weighted equally otherwise
+- `mart_plays` as a wide, denormalized play-level table enables arbitrary slice-and-dice queries without joins at query time
+- Player dimension table (`dim_players`) is essential for positional filtering — player IDs are the reliable join key, not names
+- Role-based player mart grain (passer/rusher/receiver per game) preserves analytical clarity — passing EPA and rushing EPA for the same player should not be merged
+- `fixed_drive` is preferred over `drive` in nfl-data-py — corrects tracking inconsistencies in the raw column
+- Factual derivations (quarter, red_zone, two_minute) belong in Silver — pure math with one correct answer. Analytical derivations with business judgement belong in Gold
+- Base paths in settings.py should be dataset-agnostic — each script appends its own subdirectory
+
+### What's next
+- Set up `~/.dbt/profiles.yml` with Databricks connection details
+- Upload refreshed Silver Parquet files to ADLS Gen2
+- Run `dbt run` against Databricks SQL Warehouse
+- Phase 5: Databricks SQL dashboard

@@ -23,13 +23,24 @@ clean-targets:         # directories to be removed by `dbt clean`
   - "dbt_packages"
 
 
-# Configuring models
-# Full documentation: https://docs.getdbt.com/docs/configuring-models
-
-# In this example config, we tell dbt to build all models in the example/
-# directory as views. These settings can be overridden in the individual model
-# files using the `{{ config(...) }}` macro.
+# Model configuration
+# --------------------------------------------------------------------------
+# Sets default materializations per layer. Individual models can override
+# these defaults using {{ config(materialized='...') }} in the model file.
+#
+# staging:      view  — thin translation layer, no storage cost needed
+# intermediate: view  — assembly layer, kept as view for debuggability
+# marts:        table — primary query surface for dashboard and ML (ADR-014)
+#
+# Tags allow selective runs: e.g. `dbt run --select tag:marts`
 models:
   nfl_lakehouse:
-    gold:
+    staging:
+      +materialized: view
+      +tags: ["staging"]
+    intermediate:
+      +materialized: view
+      +tags: ["intermediate"]
+    marts:
       +materialized: table
+      +tags: ["marts"]

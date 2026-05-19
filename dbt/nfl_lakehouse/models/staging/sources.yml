@@ -1,0 +1,32 @@
+# sources.yml
+# -----------
+# Declares Silver Delta table as a dbt source.
+#
+# This is the single place that tells dbt where Silver lives in Databricks.
+# If the catalog, schema, or table name ever changes, update here —
+# all staging models that reference {{ source('silver', 'pbp') }} pick it up automatically.
+#
+# Unity Catalog hierarchy: catalog → schema → table
+# Catalog: nfl_lakehouse (top-level Unity Catalog container)
+# Schema: silver (medallion layer)
+# Table: pbp (play-by-play Delta table)
+
+version: 2
+
+sources:
+  - name: silver                          # logical name used in {{ source('silver', 'pbp') }}
+    catalog: nfllakehouse_databricks      # Unity Catalog name
+    schema: silver                        # schema = medallion layer
+    description: >
+      Cleaned and enriched play-by-play data produced by the Silver PySpark transform.
+      Filtered to run/pass plays only. One row per play across seasons 2023-2025.
+    tables:
+      - name: pbp                         # Delta table name in Databricks
+        description: >
+          Silver play-by-play table. Source for all Gold dbt models via stg_pbp.
+          - name: rosters                     # player roster Delta table
+      - name: rosters                     # player roster Delta table
+        description: >
+          Silver roster table. One row per player per season.
+          Source for dim_players in Gold. Enables positional queries
+          across all play-level marts (e.g. all TEs on go routes).

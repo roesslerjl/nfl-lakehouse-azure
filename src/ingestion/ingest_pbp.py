@@ -16,14 +16,16 @@ def ingest_pbp(seasons: list[int]) -> None:
     Storage path driven by config/settings.py — swap STORAGE_ROOT env
     var to point at ADLS Gen2 in production.
     """
-    BRONZE_PATH.mkdir(parents=True, exist_ok=True)
+    # BRONZE_PATH is the dataset-agnostic base — append /pbp for play-by-play
+    pbp_path = BRONZE_PATH / "pbp"
+    pbp_path.mkdir(parents=True, exist_ok=True)
 
     for season in seasons:
         logger.info(f"Ingesting season {season}...")
 
         df = nfl.import_pbp_data([season])
 
-        output_path = BRONZE_PATH / f"season={season}"
+        output_path = pbp_path / f"season={season}"
         output_path.mkdir(exist_ok=True)
 
         df.to_parquet(output_path / "data.parquet", index=False)

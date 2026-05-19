@@ -69,6 +69,18 @@ The analytical ambition: NGS tracks what happened physically. This project answe
   Defined in `config/play_concept_map.py`. Phase 1 of play concept taxonomy;
   refined by MLflow clustering experiment in Phase 3.
 
+**Drive columns retained from Bronze**
+- `fixed_drive` — drive number within a game. `fixed_drive` is used over `drive`
+  because nfl-data-py corrects tracking inconsistencies in the fixed variant.
+  Required to group plays into drives in `mart_drives`.
+- `fixed_drive_result` — drive outcome: Touchdown, Field Goal, Punt, Turnover,
+  End of Half, etc. Primary metric for drive efficiency analysis in Gold.
+
+**Additional Bronze columns retained**
+- `yards_gained` — actual yards gained on the play (positive or negative).
+  Required for drive yardage totals, player yards, and team rushing/passing
+  yards across all Gold marts.
+
 **NGS-derived columns retained from Bronze**
 - `time_to_throw` — seconds from snap to throw (NGS)
 - `ngs_air_yards` — intended air yards per NGS tracking (vs. actual)
@@ -77,75 +89,62 @@ The analytical ambition: NGS tracks what happened physically. This project answe
 - `defense_coverage_type` — man/zone coverage (NGS, ~45% coverage)
 
 #### Silver column manifest:
-season, week, game_id, play_id
-posteam, defteam
-passer_player_name, passer_player_id, rusher_player_name, rusher_player_id, receiver_player_name
-play_type, down, ydstogo, yardline_100
+season, week, game_id, play_id, fixed_drive, fixed_drive_result, yards_gained
+offense_team, defense_team
+passer_name, passer_id, rusher_name, rusher_id, receiver_name, receiver_id
+play_type, down, yards_to_go, yards_from_end_zone
 distance_bucket, score_differential, game_seconds_remaining
 offense_formation, defense_coverage_type, coverage_available
 personnel_rb, personnel_te, personnel_wr
 play_concept, concept_label
 pass_length, pass_location, run_location, run_gap
-route, time_to_throw, ngs_air_yards
-epa, wp, wpa, was_pressure, cpoe, qb_epa
-success, high_leverage
-posteam_timeouts_remaining, defteam_timeouts_remaining
+route, time_to_throw, intended_air_yards
+expected_points_added, win_probability, win_probability_added, was_pressure, completion_pct_over_expected, qb_expected_points_added
+success, high_leverage, quarter, two_minute
+offense_timeouts_remaining, defense_timeouts_remaining
 
 ---
 
 ### Gold — Analytics-Ready Tables (dbt models)
 
-#### `gold.situational_epa` — play-level analytical table
-One row per play. Primary source for dashboard drill-down queries.
+The Gold layer is built in dbt using a three-layer structure:
 
-Key columns: all Silver columns minus raw NGS fields, plus human-readable labels.
+```
+staging/        ← thin translation layer from Silver (renames, source definition)
+intermediate/   ← joins and assembly (no raw source references)
+marts/          ← final analytics tables exposed to the dashboard and ML models
+```
 
-**Dashboard question:** In 3rd and long from Shotgun, how does QB X perform under pressure vs. no pressure across coverage types?
+#### Mart Overview
 
----
+| Mart | Grain | Primary use |
+|---|---|---|
+| `mart_plays` | 1 row per play | Arbitrary drill-down queries — the analytical engine |
+| `mart_drives` | 1 row per drive | Drive efficiency, scoring drives, field position |
+| `mart_player_game` | 1 row per player per game | Player performance box scores |
+| `mart_team_game` | 1 row per team per game | Team offense/defense per game |
+| `mart_player_season` | 1 row per player per season | Season-level rankings and trends |
+| `mart_team_season` | 1 row per team per season | Season standings and efficiency ratings |
+| `dim_players` | 1 row per player per season | Position lookups — enables positional queries across all play marts |
 
-#### `gold.qb_efficiency` — one row per QB per season
-Aggregated from `situational_epa`.
+#### `mart_plays` — the analytical engine
+Wide, fully denormalized play-level table. Every play carries all its context
+(team names, player names, situation, EPA, NGS columns) so arbitrary analytical
+queries require zero joins at query time.
 
-| Column | Description |
-|---|---|
-| season | NFL season year |
-| passer_name | QB name |
-| team | Team abbreviation |
-| plays | Total dropbacks |
-| epa_per_play | Average EPA per dropback |
-| success_rate | % plays with epa > 0 |
-| cpoe_avg | Avg completion % over expectation |
-| pressure_epa | EPA per play under pressure |
-| no_pressure_epa | EPA per play clean pocket |
-| pressure_epa_delta | Difference (pocket presence metric) |
-| high_leverage_epa | EPA in competitive game situations only |
-| avg_time_to_throw | Avg seconds to release |
-| avg_ngs_air_yards | Avg intended air yards |
+**Example question this answers:** "Jordan Love's expected_points_added per play
+on deep balls between weeks 1-10 vs. 10-18"
 
-**Dashboard question:** Which QBs maintain performance under pressure? 
-Who are the most aggressive downfield passers by intended air yards?
+#### `mart_drives` — drive-level summaries
+Aggregated from `mart_plays`. One row per drive per game.
+Answers questions about drive efficiency, scoring rates, and field position.
 
----
+#### `mart_player_game` / `mart_player_season`
+Aggregated from `mart_plays`. Player performance stats at game and season grain.
+Season mart is the primary ranking surface for the dashboard.
 
-#### `gold.team_situational` — one row per team per down/distance/season
-Aggregated from `situational_epa`.
-
-| Column | Description |
-|---|---|
-| season | NFL season year |
-| posteam | Offensive team |
-| down | 1-4 |
-| distance_bucket | short / medium / long |
-| play_type | run / pass |
-| offense_formation | Shotgun / Under Center / Pistol |
-| plays | Play count |
-| epa_per_play | Average EPA |
-| success_rate | % positive EPA plays |
-| pass_rate | % pass plays in this situation |
-
-**Dashboard question:** Which teams are most efficient on 2nd and medium? 
-Who over-relies on passing in short yardage situations?
+#### `mart_team_game` / `mart_team_season`
+Aggregated from `mart_plays`. Team offense and defense stats at game and season grain.
 
 ---
 
@@ -257,6 +256,103 @@ coverage. Situational EPA, QB efficiency, and team tendencies are
 metrics actual analytics departments use. Personnel grouping analysis 
 was explicitly deprioritized as analytically commoditized.
 
+**ADR-008: `mart_plays` as the analytical engine**
+The play-level mart is wide and fully denormalized — every play carries all its
+context (team, player, situation, EPA, NGS columns) so arbitrary slice-and-dice
+queries require zero joins at query time. This directly supports the platform's
+goal of answering any player or team question at any level of granularity.
+Rollup marts (player, team, season) are conveniences for the dashboard,
+not the primary analytical surface.
+
+**ADR-009: Three-layer dbt structure (staging → intermediate → marts)**
+Staging translates Silver to dbt world (column renames, source definition, no
+business logic). Intermediate handles joins and assembly. Marts are the final
+exposed tables. This separation makes debugging deterministic — each layer has
+a single responsibility, so a data quality issue is traceable to exactly one layer.
+
+**ADR-010: Python config as source of truth for business logic**
+`play_concept_map.py` drives the `play_concept` and `concept_label` columns
+during the Silver transform. dbt Gold models consume these columns as-is —
+business logic is not re-implemented in SQL. Changing the taxonomy means
+editing one Python file and re-running Silver; Gold picks it up automatically.
+
+**ADR-011: Human-readable column names enforced at Silver**
+All abbreviated or source-system column names (e.g. `posteam`, `epa`, `cpoe`)
+are renamed to full descriptive names (e.g. `offense_team`, `expected_points_added`,
+`completion_pct_over_expected`) in the Silver transform via an explicit RENAME_MAP.
+This means every layer above Silver — dbt, ML, dashboard — works with self-documenting
+column names. The rename is applied after all derived column logic so intermediate
+calculations still reference original Bronze names.
+
+**ADR-012: Factual derivations belong in Silver, analytical derivations in Gold**
+Silver is the appropriate home for columns that are mathematically unambiguous
+derivations of existing fields — there is one correct answer and no business
+judgement involved. `quarter` (derived from game_seconds_remaining) and
+`two_minute` (final 2 mins of Q2/Q4) fall into this category alongside
+`distance_bucket`. Analytical derivations that involve a design choice
+(e.g. what threshold defines "success" or "high leverage") also currently
+live in Silver but could reasonably be debated. This rule provides a
+decision framework for future derived columns: if it's pure math, it's Silver;
+if it encodes a business choice, it belongs in Gold intermediate.
+
+**ADR-013: Retain intermediate layer despite minimal column count**
+`int_plays_enriched.sql` derives only two columns (`primary_player_name`,
+`primary_player_id`), but the intermediate layer is kept because both columns
+are consumed by three separate marts (mart_plays, mart_player_game,
+mart_player_season). Centralising the CASE WHEN logic once in intermediate
+is preferable to repeating it across marts — a single change propagates
+everywhere. If the intermediate layer ever grows to zero dependents, it
+should be removed. `game_half` was explicitly rejected as an intermediate
+column because it is trivially derivable from `quarter` at query time
+and adds no storage value.
+
+**ADR-014: Mart-level materialization strategy**
+All mart models are materialized as `table` in Databricks. Marts are the
+primary query surface for the dashboard and ML pipelines — query speed
+takes priority over build time. Views were rejected because repeated
+dashboard queries against a view re-execute the full SQL on every request,
+which is unacceptable at mart_plays scale (~150k+ rows across 3 seasons).
+Incremental materialization is reserved for production scale; `table` is
+appropriate for the current dataset size and rebuild cadence.
+
+**ADR-015: Surrogate key on all mart tables**
+All mart models include a surrogate key column (`mart_key`) generated via
+`dbt_utils.generate_surrogate_key()` from the natural composite key of each
+mart. For mart_plays this is `['game_id', 'play_id']`. A single-column
+unique identifier simplifies joins between marts, enables reliable dbt
+uniqueness tests, and makes dashboard tooling and ML feature pipelines
+easier to work with than composite keys.
+
+**ADR-016: Season-level marts reference game-level marts, not play-level data**
+mart_player_season and mart_team_season reference their game-level counterparts
+(mart_player_game, mart_team_game) rather than int_plays_enriched directly.
+This enforces a clean dependency chain: plays → game → season. Each layer
+aggregates from the layer below it. Season-level rates are recomputed from
+summed game-level counts (see ADR-017), never by averaging game-level rates.
+QB efficiency metrics (cpoe, intended_air_yards) are weighted by pass_plays
+so high-volume games contribute proportionally to season averages.
+
+**ADR-017: Raw counts stored alongside rates in game-level marts**
+Game-level marts store both raw counts (e.g. `successful_plays`, `pass_plays`)
+and derived rates (e.g. `success_rate`, `pass_rate`). Raw counts are required
+by season-level marts to correctly recompute rates from totals rather than
+averaging game-level rates. Averaging rates across games produces incorrect
+results when play counts vary — a 5-play game and a 50-play game would be
+weighted equally. Storing raw counts at game level makes correct season
+aggregation possible without re-reading play-level data.
+
+**ADR-018: Roster data follows the same Bronze → Silver → Gold medallion pattern**
+No shortcuts to Silver, even for simple lookup data. Consistent pipeline
+patterns across all data sources make the project easier to reason about,
+debug, and extend. The Bronze layer retains the raw roster file exactly as
+nfl-data-py returns it; Silver selects and cleans the relevant columns.
+
+**ADR-019: `dim_players` grain is player_id + season, not player_id alone**
+Players change teams across seasons. A single-row-per-player design would
+produce incorrect joins when a player's team changes between years — a TE
+who played for the Eagles in 2023 and the Cowboys in 2024 needs two rows.
+Joining play data to dim_players uses season + player_id so every join is
+accurate to the season the play occurred in.
 ---
 
 ## Project Phases

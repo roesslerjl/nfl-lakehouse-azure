@@ -13,8 +13,11 @@ SEASONS = [2023, 2024, 2025]
 # e.g. abfss://bronze@youraccount.dfs.core.windows.net/
 STORAGE_ROOT = os.getenv("STORAGE_ROOT", "data")
 
-BRONZE_PATH = Path(STORAGE_ROOT) / "bronze" / "pbp"
-SILVER_PATH = Path(STORAGE_ROOT) / "silver" / "pbp"
+# Base paths — dataset-agnostic. Each ingestion/transform script appends
+# its own subdirectory (e.g. BRONZE_PATH / "pbp", BRONZE_PATH / "rosters")
+# so multiple data sources share the same medallion root without collision.
+BRONZE_PATH = Path(STORAGE_ROOT) / "bronze"
+SILVER_PATH = Path(STORAGE_ROOT) / "silver"
 GOLD_PATH   = Path(STORAGE_ROOT) / "gold"
 
 # ── Azure (production only) ───────────────────────────────

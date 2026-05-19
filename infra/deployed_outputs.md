@@ -1,6 +1,7 @@
 # Deployed Infrastructure Outputs
 
-Values produced by `terraform apply`. Update this file after any infrastructure change.
+Values produced by `terraform apply`. 
+To update this file after any infrastructure change.
 
 | Output | Value |
 |---|---|
