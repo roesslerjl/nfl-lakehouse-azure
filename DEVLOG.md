@@ -8,13 +8,9 @@ Running log of build sessions. Updated after every session.
 
 ### What I did
 - Set up conda environment (nfl-lakehouse, Python 3.11)
-- Installed Claude Code v2.1.138
-- Initialized CLAUDE.md with full project context and learning guardrails
 
 ### What I learned
-- Claude Code reads CLAUDE.md at the start of every session — it's persistent context
-- `/init` analyzes repo structure to bootstrap the file
-- Claude Code works alongside VS Code: terminal for prompts, VS Code to see changes
+- VS Code alongside terminal: terminal for running scripts, VS Code to review changes
 
 ### What's next
 - Create ARCHITECTURE.md
@@ -127,3 +123,63 @@ Running log of build sessions. Updated after every session.
 - Upload refreshed Silver Parquet files to ADLS Gen2
 - Run `dbt run` against Databricks SQL Warehouse
 - Phase 5: Databricks SQL dashboard
+
+---
+
+## 2026-05-19
+
+### What I did
+- Configured `~/.dbt/profiles.yml` with Databricks SQL Warehouse connection (catalog fixed from `main` → `nfllakehouse_databricks`)
+- Verified dbt connection: `dbt debug` all checks passed
+- Re-uploaded refreshed Silver Parquet (6 files — pbp + rosters × 3 seasons) to ADLS Gen2
+- Created `nfllakehouse_databricks.silver` schema in Unity Catalog
+- Converted Silver Parquet to Delta in-place using `DeltaTable.convertToDelta()` and registered both tables
+- Fixed three bugs discovered during `dbt run`:
+  - `int_plays_enriched.sql` missing `fixed_drive` and `fixed_drive_result` in pass-through columns
+  - `mart_team_game.sql` trailing comma in `defense_stats` CTE and `pass_plays_allowed` missing from `combined` CTE
+  - `mart_drives.sql` ambiguous `game_id` reference in `generate_surrogate_key` — qualified as `ds.game_id`
+- All 10 Gold models built successfully in Unity Catalog (`gold` schema)
+- Documented ADR-020: Databricks Workflows as future orchestration layer (deferred to post-Phase 5)
+
+### What I learned
+- `DeltaTable.convertToDelta()` converts existing Parquet to Delta in-place — just adds a `_delta_log`, no data rewrite
+- When running `dbt run --select <model>`, upstream views are NOT rebuilt unless you use the `+` prefix — stale view definitions cause silent column-not-found errors
+- `generate_surrogate_key` uses raw column name strings in the SQL it generates — qualify with table alias when the final SELECT has a join to avoid ambiguous reference errors
+- Databricks Workflows is the native orchestration answer for this stack; full automation requires moving ingestion/transform scripts into Databricks via Repos
+
+### What's next
+- Phase 5: Databricks SQL dashboard
+  - Player performance explorer (position, team, season, situation filters)
+  - Team efficiency rankings (offense + defense EPA per play)
+  - Drive efficiency analysis
+  - Situational tendencies (formation, personnel, down/distance)
+
+---
+
+## 2026-05-19 (evening) / 2026-05-20
+
+### What I did
+- Renamed `players_dim.sql` → `dim_players.sql` for naming consistency
+- Cleaned up `.gitignore`: removed malformed line, added `CLAUDE.md` and `HANDOFF.md` as local-only files
+- Removed all tooling references from `DEVLOG.md` — project docs are tool-agnostic
+- Started Phase 5: Databricks SQL Lakeview dashboard
+- Created `NFL Analytics Lakehouse` dashboard in Databricks SQL
+- Built Page 1 — Team Efficiency Rankings:
+  - Bar chart: offensive EPA/play by team, sorted descending
+  - Table: full team stats (offense + defense) side by side
+  - Season filter wired to both widgets — single selection updates entire page
+- Added QB Deep Dive dataset to Databricks (mart_plays filtered to pass plays) — ready to build Page 2 next session
+
+### What I learned
+- Lakeview dashboard filter widgets added via the funnel icon in the toolbar — not inside chart widget settings
+- Dashboard-level filters auto-wire to all widgets using the same dataset
+- `avg()` in SQL ignores NULL values automatically — no special CASE WHEN needed to exclude nulls from averages
+- `HAVING` filters after aggregation (post-GROUP BY); `WHERE` filters before — you cannot reference column aliases in HAVING, must use the original expression e.g. `HAVING count(*) > 100`
+- `GROUP BY` gives `count(*)` its per-group context — without it, count would span the entire table
+
+### What's next
+- Page 2: QB Deep Dive
+  - Query: aggregate mart_plays (pass plays) to one row per QB per season
+  - Metrics: EPA/dropback, CPOE, pressure rate faced, EPA under pressure, deep ball rate/EPA, avg time to throw
+  - Filters: season, week (game level), QB name, pass_length, down
+- Pages 3-5: Player Explorer, Situational Tendencies, Drive Efficiency

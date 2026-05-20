@@ -14,8 +14,6 @@ __pycache__/
 # Conda/pip virtual environment folders — dependencies installed locally
 env/
 
-venv/"CLAUDE.md" 
-
 venv/
 
 # Terraform — state contains sensitive resource details, .terraform is provider cache
@@ -30,3 +28,8 @@ dbt/nfl_lakehouse/logs/
 
 # dbt compiled output — regenerated on every run
 dbt/nfl_lakehouse/target/
+
+# Handoff/session notes and tooling config — local only, not part of the repo
+HANDOFF.md
+CLAUDE.md
+.claude/worktrees/

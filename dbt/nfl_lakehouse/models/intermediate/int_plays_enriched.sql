@@ -74,6 +74,8 @@ select
     was_pressure,
     completion_pct_over_expected,
     qb_expected_points_added,
+    fixed_drive,
+    fixed_drive_result,
     offense_timeouts_remaining,
     defense_timeouts_remaining,     -- comma required — derived columns follow
 

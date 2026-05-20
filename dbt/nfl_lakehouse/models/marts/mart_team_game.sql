@@ -82,7 +82,7 @@ defense_stats as (
         ) as pressure_rate,
         sum(red_zone) as red_zone_plays_allowed,
         round(sum(case when red_zone = 1 then expected_points_added end), 3) as red_zone_epa_allowed, 
-        sum(case when play_type = 'pass' then 1 else 0 end) as pass_plays_allowed,
+        sum(case when play_type = 'pass' then 1 else 0 end) as pass_plays_allowed
     from plays
     group by game_id, defense_team
 ),
@@ -121,6 +121,7 @@ combined as (
         d.successful_plays_allowed,
         d.success_rate_allowed,
         d.pressure_rate,
+        d.pass_plays_allowed,
         d.red_zone_plays_allowed,
         d.red_zone_epa_allowed
     from offense_stats o

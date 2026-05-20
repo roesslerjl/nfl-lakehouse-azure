@@ -353,6 +353,33 @@ produce incorrect joins when a player's team changes between years — a TE
 who played for the Eagles in 2023 and the Cowboys in 2024 needs two rows.
 Joining play data to dim_players uses season + player_id so every join is
 accurate to the season the play occurred in.
+
+**ADR-020: Databricks Workflows as the orchestration layer (not yet implemented)**
+
+The current pipeline is fully manual: ingestion and transform scripts run locally, Silver
+is uploaded to ADLS via CLI, and `dbt run` is executed by hand. This works for development
+but is not repeatable or production-grade.
+
+Decision: when orchestration is implemented, use **Databricks Workflows** as the DAG
+orchestrator. Workflows is native to the Databricks platform, has first-class dbt support,
+requires no additional services, and is a strong portfolio talking point.
+
+The planned task chain is:
+1. Python task — `ingest_pbp.py` + `ingest_rosters.py` (Bronze)
+2. Python task — `transform_pbp.py` + `transform_rosters.py` (Silver)
+3. Notebook task — register/refresh Silver Delta tables in Unity Catalog
+4. dbt task — `dbt run` (Gold)
+
+Prerequisite: ingestion and transform scripts must move from local execution into
+Databricks. The recommended path is connecting the GitHub repo via **Databricks Repos**
+so Workflows pulls scripts directly from source control — no manual uploads, no DBFS
+copying.
+
+Alternatives considered: Azure Data Factory (heavier, more complex, separate service),
+Apache Airflow (requires self-hosting or managed MWAA, overkill for this project).
+
+Status: **deferred** — to be implemented after Phase 5 (dashboard).
+
 ---
 
 ## Project Phases
@@ -361,8 +388,8 @@ accurate to the season the play occurred in.
 |---|---|---|
 | 1 | Repo structure, Bronze ingestion, EDA | Complete |
 | 2 | Silver transformation pipeline | Complete |
-| 3 | Azure + Terraform provisioning | Pending |
-| 4 | Gold dbt models | Pending |
+| 3 | Azure + Terraform provisioning | Complete |
+| 4 | Gold dbt models + Unity Catalog deployment | Complete |
 | 5 | Databricks SQL dashboard | Pending |
 | 6 | MLflow Experiment 1 (WP model) | Pending |
 | 7 | MLflow Experiment 2 (QB EPA) | Pending |

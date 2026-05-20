@@ -91,7 +91,7 @@ drive_stats as (
 select
     -- Surrogate key (ADR-015) — three fields because fixed_drive is only
     -- unique within a game, not globally
-    {{ dbt_utils.generate_surrogate_key(['game_id', 'offense_team', 'fixed_drive']) }} as mart_key,
+    {{ dbt_utils.generate_surrogate_key(['ds.game_id', 'ds.offense_team', 'ds.fixed_drive']) }} as mart_key,
 
     -- Identifiers
     ds.season,
