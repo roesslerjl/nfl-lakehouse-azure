@@ -5,7 +5,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from config import (RARE_CATEGORY_MIN_FREQ, 
+from ml_config import (RARE_CATEGORY_MIN_FREQ,
                     WP_NUMERIC_FEATURES, 
                     QB_EPA_NUMERIC_FEATURES, 
                     QB_EPA_CATEGORICAL_FEATURES, 

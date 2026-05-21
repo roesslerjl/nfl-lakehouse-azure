@@ -1,6 +1,6 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from config import (
+from ml_config import (
     SEED,
     MART_PLAYS_TABLE,
     COVERAGE_TYPES_EXCLUDE,

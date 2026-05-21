@@ -1,7 +1,7 @@
 from shared.features import load_mart_plays, get_wp_features
 from shared.mlflow_utils import log_run, log_feature_importance
 from win_probability.model import WinProbabilityModel
-from config import LOGREG_PARAM_GRID, XGBOOST_WP_PARAM_GRID, SEED, WP_EXPERIMENT
+from ml_config import LOGREG_PARAM_GRID, XGBOOST_WP_PARAM_GRID, SEED, WP_EXPERIMENT
 
 # =============================================================================
 # Experiment config
