@@ -77,7 +77,8 @@ select
     fixed_drive,
     fixed_drive_result,
     offense_timeouts_remaining,
-    defense_timeouts_remaining,     -- comma required — derived columns follow
+    defense_timeouts_remaining,
+    posteam_won,                    -- binary game outcome — WP classifier target
 
     -- -------------------------------------------------------------------------
     -- Derived: primary player on the play

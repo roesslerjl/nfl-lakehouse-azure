@@ -64,6 +64,9 @@ def transform_pbp(seasons: list[int]):
         # Fundamental metric for drive yardage totals, player yards, and team
         # rushing/passing yards across all Gold marts
         "yards_gained",
+        # result + home_team used to derive posteam_won binary target for WP model
+        # result = final score differential from home team perspective (positive = home won)
+        "result", "home_team",
     ]
 
     df = df[SILVER_COLUMNS]
@@ -123,6 +126,12 @@ def transform_pbp(seasons: list[int]):
     # yards_from_end_zone <= 20 is the universally accepted threshold
     df["red_zone"] = (df["yardline_100"] <= 20).astype("int8")
 
+    # Derive posteam_won binary target for win probability classifier
+    # result > 0 means home team won; result < 0 means away team won
+    home_won = df["result"] > 0
+    posteam_is_home = df["posteam"] == df["home_team"]
+    df["posteam_won"] = ((posteam_is_home & home_won) | (~posteam_is_home & ~home_won)).astype("int8")
+
     # Personnel parsing 
     # extracting RB/TE/WR counts from the offense_personnel string
     def parse_personnel(personnel_str):
@@ -137,8 +146,8 @@ def transform_pbp(seasons: list[int]):
         lambda x: pd.Series(parse_personnel(x))
     )
 
-    # drop old personnel column as it is no longer needed
-    df = df.drop(columns=["offense_personnel"])
+    # drop intermediate columns no longer needed after derivations
+    df = df.drop(columns=["offense_personnel", "result", "home_team"])
 
     # Derive play_concept
     # produces values like Pass: Shotgun_ShortRight, UnderCenter_DeepLeft, Pistol_ShortMiddle

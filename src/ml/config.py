@@ -21,7 +21,7 @@ WP_NUMERIC_FEATURES = [
     "score_differential", "game_seconds_remaining",
     "offense_timeouts_remaining", "defense_timeouts_remaining",
 ]
-WP_TARGET = "win_probability"
+WP_TARGET = "posteam_won"
 
 LOGREG_PARAM_GRID = {"model__C": [0.01, 0.1, 1.0, 10.0]}
 XGBOOST_WP_PARAM_GRID = {

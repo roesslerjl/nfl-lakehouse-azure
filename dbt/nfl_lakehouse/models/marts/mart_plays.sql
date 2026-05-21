@@ -119,6 +119,11 @@ select
     -- Game state
     -- -------------------------------------------------------------------------
     offense_timeouts_remaining,
-    defense_timeouts_remaining
+    defense_timeouts_remaining,
+
+    -- -------------------------------------------------------------------------
+    -- Game outcome — binary target for win probability classifier
+    -- -------------------------------------------------------------------------
+    posteam_won
 
 from enriched
