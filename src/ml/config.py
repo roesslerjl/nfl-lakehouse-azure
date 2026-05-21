@@ -1,4 +1,5 @@
 SEED = 42
+DATABRICKS_USER = "jlroessler98@gmail.com"
 
 # =============================================================================
 # Unity Catalog
@@ -62,3 +63,10 @@ CLUSTERING_CATEGORICAL_FEATURES = [
     "run_location", "down", "distance_bucket", "route",
 ]
 KMEANS_K_GRID = list(range(4, 17))
+
+# =============================================================================
+# MLflow Experiment Names
+# =============================================================================
+WP_EXPERIMENT = f"/Users/{DATABRICKS_USER}/win_probability"
+QB_EPA_EXPERIMENT = f"/Users/{DATABRICKS_USER}/qb_epa"
+CLUSTERING_EXPERIMENT = f"/Users/{DATABRICKS_USER}/play_clustering"

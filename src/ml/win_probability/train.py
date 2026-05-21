@@ -1,12 +1,12 @@
 from shared.features import load_mart_plays, get_wp_features
 from shared.mlflow_utils import log_run, log_feature_importance
 from win_probability.model import WinProbabilityModel
-from config import LOGREG_PARAM_GRID, XGBOOST_WP_PARAM_GRID, SEED
+from config import LOGREG_PARAM_GRID, XGBOOST_WP_PARAM_GRID, SEED, WP_EXPERIMENT
 
 # =============================================================================
 # Experiment config
 # =============================================================================
-EXPERIMENT_NAME = "win_probability"
+EXPERIMENT_NAME = WP_EXPERIMENT
 
 RUNS = [
     {"model_type": "logreg", "C": 1.0},

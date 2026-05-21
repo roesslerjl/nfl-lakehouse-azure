@@ -6,7 +6,9 @@ import mlflow.sklearn
 # Experiment setup
 # =============================================================================
 def get_or_create_experiment(name):
-    """Return experiment ID, creating the experiment if it doesn't exist."""
+    """Return experiment ID, creating the experiment if it doesn't exist.
+    name must be an absolute Databricks workspace path e.g. /Users/<email>/experiment.
+    """
     experiment = mlflow.get_experiment_by_name(name)
     if experiment is not None:
         return experiment.experiment_id
