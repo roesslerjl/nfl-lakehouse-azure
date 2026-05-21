@@ -27,7 +27,7 @@ def get_wp_features(df, test_size=0.2):
     cols = WP_NUMERIC_FEATURES + [WP_TARGET]
     data = df[df["play_type"].isin(["pass", "run"])][cols].dropna()
     X = data[WP_NUMERIC_FEATURES]
-    y = data[WP_TARGET]
+    y = data[WP_TARGET].astype(int)
     return train_test_split(X, y, test_size=test_size, random_state=SEED)
 
 # =============================================================================
