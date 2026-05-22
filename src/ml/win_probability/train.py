@@ -21,13 +21,17 @@ MODEL_GRIDS = [
 # Grid search helpers
 # =============================================================================
 def _expand_grid(param_grid):
-    """Expand a param grid dict into a list of individual param dicts."""
+    """
+    Expand a param grid dict into a list of individual param dicts.
+    """
     keys = list(param_grid.keys())
     values = list(param_grid.values())
     return [dict(zip(keys, combo)) for combo in itertools.product(*values)]
 
 def _strip_prefix(params, prefix="model__"):
-    """Strip sklearn pipeline prefix from param names for logging."""
+    """
+    Strip sklearn pipeline prefix from param names for logging.
+    """
     return {k.replace(prefix, ""): v for k, v in params.items()}
 
 # =============================================================================
@@ -76,6 +80,12 @@ def run_wp_experiment(spark):
                         targets=WP_TARGET,
                         model_type="classifier",
                     )
+
+                    pred_table = eval_data.copy()
+                    pred_table["predicted_proba"] = model.predict_proba(X_test)
+                    pred_table["predicted_label"] = (pred_table["predicted_proba"] >= 0.5).astype(int)
+                    pred_table["correct"] = (pred_table["predicted_label"] == pred_table[WP_TARGET]).astype(int)
+                    mlflow.log_table(data=pred_table, artifact_file="eval_predictions.json")
 
                 auc = eval_result.metrics.get("roc_auc", -1)
                 print(f"  [{model_type}] {clean_params} → AUC: {auc:.4f}")
