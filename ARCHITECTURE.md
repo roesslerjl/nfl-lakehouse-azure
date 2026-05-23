@@ -151,40 +151,36 @@ Aggregated from `mart_plays`. Team offense and defense stats at game and season 
 ## MLflow Experiments
 
 ### Experiment 1 — Win Probability Model
-**Goal:** Train a WP model from scratch and benchmark against the nflfastR 
-baseline already embedded in the dataset (`wp` column).
+**Goal:** Given a game situation mid-drive, predict whether the possession team will win. Binary classifier (posteam_won).
 
-**Features:** `down, ydstogo, yardline_100, score_differential, 
-game_seconds_remaining, posteam_timeouts_remaining, defteam_timeouts_remaining`
+**Features:** `down, yards_to_go, yards_from_end_zone, score_differential, game_seconds_remaining, offense_timeouts_remaining, defense_timeouts_remaining`
 
-**Target:** `wp`
+**Target:** `posteam_won` (1 = possession team won, 0 = lost) — derived from `result` + `home_team` in Silver
 
-**Models:** Logistic Regression baseline → XGBoost
+**Models:** Logistic Regression (C grid: 0.01, 0.1, 1.0, 10.0) and XGBoost (n_estimators × max_depth × learning_rate grid = 8 combos)
 
-**MLflow tracking:** params, RMSE, AUC, feature importance per run
+**MLflow tracking:** parent run per model type; child run per hyperparameter combo. `mlflow.evaluate()` logs ROC AUC, accuracy, precision, recall, confusion matrix automatically. `mlflow.log_table()` logs per-prediction error table for post-hoc situational analysis. Feature importance logged as CSV artifact on best run.
 
-**Story:** "I built a WP model from scratch and benchmarked it against the 
-industry standard — the nflfastR model used by ESPN and NFL teams."
+**Result:** XGBoost best AUC ~0.84. Earlier in the game = harder predictions (less information resolved). Feature importance shows `game_seconds_remaining` and `score_differential` dominate.
+
+**Story:** "I built a WP classifier from scratch — given a 3rd-and-7 from your own 25 with 4 minutes left and down by 3, what are the odds you win? 84% AUC. I used MLflow to grid-search two model types and log evaluation tables that let me slice predictions by game situation to understand where the model struggles."
 
 ---
 
 ### Experiment 2 — Situation-Adjusted QB EPA
 **Goal:** Control for situation to isolate true QB contribution above expectation.
 
-**Features:** `down, distance_bucket, yardline_100, score_differential, 
-was_pressure, offense_formation, defense_coverage_type, time_to_throw, 
-ngs_air_yards`
+**Features (numeric):** `yards_to_go, yards_from_end_zone, score_differential, game_seconds_remaining, time_to_throw, intended_air_yards, personnel_rb, personnel_te, personnel_wr`
 
-**Target:** `epa`
+**Features (categorical):** `down, distance_bucket, offense_formation, defense_coverage_type, pass_length`
 
-**Model:** XGBoost regressor — predict expected EPA given situation, 
-measure actual vs. expected per QB across seasons
+**Target:** `qb_expected_points_added`
 
-**MLflow tracking:** RMSE, feature importance, per-QB residuals logged as 
-artifacts
+**Model:** XGBoost regressor with `SelectFromModel` feature selection step in pipeline (see ADR-027). Predict expected EPA given situation; residuals per QB across seasons = situation-adjusted value above expectation.
 
-**Story:** "Same concept as CPOE but applied to EPA — controlling for 
-situation to isolate quarterback value."
+**MLflow tracking:** RMSE, feature importance, permutation importance logged as artifact, per-QB residuals logged as artifact.
+
+**Story:** "Same concept as CPOE but applied to EPA — controlling for situation to isolate quarterback value. Sparse NGS columns (time_to_throw, coverage type) required a feature selection step to prevent noise from degrading the model."
 
 ---
 
@@ -380,6 +376,38 @@ Apache Airflow (requires self-hosting or managed MWAA, overkill for this project
 
 Status: **deferred** — to be implemented after Phase 5 (dashboard).
 
+**ADR-021: Win Probability target is binary classification, not WP regression**
+
+The dataset already contains a pre-calculated `wp` column from nflfastR. Training a model to predict `wp` is training another surrogate of the same surrogate — circular, and not analytically interesting. Instead the WP experiment predicts `posteam_won` (1/0), the actual game outcome. This answers the real question: given a game situation, did the possession team end up winning? Binary classification also enables ROC AUC as a single interpretable metric and produces a posterior probability that is directly usable in-game analytics contexts. `posteam_won` is derived from `result > 0` (home team won) and `posteam == home_team` in the Silver transform so the label is available in `mart_plays`.
+
+**ADR-022: Model class wraps a full sklearn Pipeline**
+
+`WinProbabilityModel` (and future experiment model classes) encapsulate the full sklearn Pipeline — preprocessor + estimator — rather than exposing the pipeline externally or logging just the estimator. This means the MLflow artifact is self-contained: loading the run's model artifact gives you a complete, deployable object that handles raw feature input with no pre-processing setup on the caller's side. It also means `mlflow.evaluate()` can call the logged artifact directly without extra wiring. The class exposes `fit()`, `predict_proba()`, `get_fit_summary()`, and `get_feature_importances()` as a stable interface regardless of the underlying model type.
+
+**ADR-023: Parent/child MLflow run hierarchy for grid search**
+
+Grid search across hyperparameter combos is logged as a two-level hierarchy: one parent run per model type (e.g. `wp_logreg`, `wp_xgboost`), one child run per hyperparameter combination. The parent run summarizes the experiment (logs `best_auc`); each child run is self-contained with its params, metrics, model artifact, evaluation tables, and feature importance. This mirrors how production ML teams use MLflow — the parent is the "experiment session," children are individual trials. The MLflow UI renders this as an expandable tree that makes comparison straightforward without polluting the top-level experiment view with every variant.
+
+**ADR-024: `mlflow.evaluate()` over manual metric logging for evaluation**
+
+`mlflow.evaluate()` is called on each child run after the model artifact is logged. It loads the artifact, runs predictions on `eval_data`, and logs ROC AUC, accuracy, precision, recall, F1, and a confusion matrix automatically as structured evaluation tables. This replaces manual `mlflow.log_metrics({"auc": ...})` calls and produces richer, queryable evaluation data in the MLflow UI. Additionally, `mlflow.log_table()` logs a per-prediction DataFrame (features + predicted proba + label + correct flag) that enables post-hoc slicing by game situation — e.g. filtering to rows where `game_seconds_remaining < 120` to see model performance in two-minute-drill situations.
+
+**ADR-025: `ml_config.py` naming to avoid root package collision**
+
+The ML config file is named `ml_config.py`, not `config.py`. The root of the repo contains a `config/` directory (a Python package for `settings.py` and `play_concept_map.py`). When Python resolves `from config import X`, it finds the package first and raises `ImportError`. Renaming to `ml_config.py` sidesteps this entirely. All ML modules import from `ml_config` explicitly.
+
+**ADR-026: Explicit column list in `stg_pbp.sql` (not `SELECT *`)**
+
+Databricks Serverless SQL Warehouse caches the column expansion of `SELECT *` at view-creation time, not at query time. When a new column is added to Silver (`posteam_won`), the `stg_pbp` view must be dropped and recreated. Even after recreation, the Serverless warehouse may serve the old schema until the warehouse is restarted. The fix is to use an explicit column list in `stg_pbp.sql` — this makes the view definition explicit and avoids the caching problem entirely. Any future Silver schema changes require updating the staging view's column list, which is a small cost for reliable schema propagation.
+
+**ADR-027: Feature selection in QB EPA experiment, not WP**
+
+The WP model uses 7 hand-picked situational features — all are known strong signals (down, distance, score, time, timeouts). Feature selection adds no value here. The QB EPA model includes sparse NGS columns (`time_to_throw`, `intended_air_yards`, `defense_coverage_type`) that have significant null rates and may add noise rather than signal. The appropriate place to handle this is a `SelectFromModel` step in the sklearn Pipeline between the preprocessor and the XGBoost estimator. The selected feature mask is logged as a permutation importance artifact so the selection can be inspected and audited.
+
+**ADR-028: MLflow models registered in Unity Catalog under the Gold schema**
+
+MLflow model artifacts for production experiments are registered in Unity Catalog using a three-level namespace: `nfllakehouse_databricks.gold.<model_name>` (e.g. `nfllakehouse_databricks.gold.qb_epa`). Registering under the Gold schema co-locates model artifacts with the Delta tables they are derived from, making the relationship between data and model explicit in the same governance layer. Unity Catalog applies the same lineage tracking, access control, and discoverability to registered models as it does to tables — a model registered here is auditable and permissioned consistently with the rest of the platform. This follows the Databricks-recommended path of UC Model Registry over the legacy workspace model registry, which has no lineage integration and is being deprecated in favour of UC. The `@champion` alias is set on the best-performing version after each experiment run so downstream consumers can always load the current best model by alias without hardcoding a run ID.
+
 ---
 
 ## Project Phases
@@ -390,7 +418,7 @@ Status: **deferred** — to be implemented after Phase 5 (dashboard).
 | 2 | Silver transformation pipeline | Complete |
 | 3 | Azure + Terraform provisioning | Complete |
 | 4 | Gold dbt models + Unity Catalog deployment | Complete |
-| 5 | Databricks SQL dashboard | Pending |
-| 6 | MLflow Experiment 1 (WP model) | Pending |
-| 7 | MLflow Experiment 2 (QB EPA) | Pending |
+| 5 | Databricks SQL dashboard (Pages 1-3) | Complete (Pages 4-5 pending) |
+| 6 | MLflow Experiment 1 (WP model) | Complete |
+| 7 | MLflow Experiment 2 (QB EPA) | Next |
 | 8 | MLflow Experiment 3 (Play clustering) | Pending |

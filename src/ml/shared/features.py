@@ -35,17 +35,27 @@ def get_wp_features(df, test_size=0.2):
 # =============================================================================
 def get_qb_epa_features(df, test_size=0.2):
     """
-    Filter to pass plays with valid QB EPA and coverage type.
-    Excludes BLOWN coverages — scheme breakdowns, not play design signal.
+    I filter to pass plays with a valid QB EPA target and a known passer.
+    I exclude BLOWN coverages because they represent scheme breakdowns rather
+    than play design signal and would add noise to the model.
+
+    I return a 5-tuple: (X_train, X_test, y_train, y_test, passer_name_test).
+    passer_name_test travels alongside the test split so train.py can compute
+    per-QB residuals on the same rows the model was evaluated on.
     """
-    all_cols = QB_EPA_NUMERIC_FEATURES + QB_EPA_CATEGORICAL_FEATURES + [QB_EPA_TARGET]
+    all_cols = QB_EPA_NUMERIC_FEATURES + QB_EPA_CATEGORICAL_FEATURES + [QB_EPA_TARGET, "passer_name"]
     data = (df[(df["play_type"] == "pass") &
                (~df["defense_coverage_type"].isin(COVERAGE_TYPES_EXCLUDE)) &
                (df["passer_name"].notna())]
             [all_cols].dropna(subset=[QB_EPA_TARGET]))
     X = data[QB_EPA_NUMERIC_FEATURES + QB_EPA_CATEGORICAL_FEATURES]
     y = data[QB_EPA_TARGET]
-    return train_test_split(X, y, test_size=test_size, random_state=SEED)
+    passer_name = data["passer_name"]
+    X_train, X_test, y_train, y_test, pn_train, pn_test = train_test_split(
+        X, y, passer_name, test_size=test_size, random_state=SEED
+    )
+    # I discard pn_train because residuals are only computed on the test set.
+    return X_train, X_test, y_train, y_test, pn_test
 
 # =============================================================================
 # Play Clustering

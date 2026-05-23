@@ -45,11 +45,19 @@ QB_EPA_CATEGORICAL_FEATURES = [
 ]
 QB_EPA_TARGET = "qb_expected_points_added"
 
+RIDGE_QB_PARAM_GRID = {"model__alpha": [0.1, 1.0, 10.0, 100.0]}
+
 XGBOOST_QB_PARAM_GRID = {
     "model__n_estimators": [100, 300],
     "model__max_depth": [4, 6],
     "model__learning_rate": [0.05, 0.1],
+    # I include subsample because QB EPA targets are noisy. Row subsampling
+    # per tree reduces overfitting to individual outlier plays.
+    "model__subsample": [0.7, 0.9],
 }
+
+# Unity Catalog path for the registered QB EPA model (see ADR-028).
+QB_EPA_MODEL_REGISTRY_NAME = f"{CATALOG}.{GOLD_SCHEMA}.qb_epa"
 
 # =============================================================================
 # Play Clustering
