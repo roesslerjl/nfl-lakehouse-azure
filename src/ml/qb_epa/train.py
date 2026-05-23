@@ -93,7 +93,7 @@ def _log_permutation_importance(model, X_test, y_test):
     """
     perm_result = permutation_importance(
         model.pipeline, X_test, y_test,
-        n_repeats=10,
+        n_repeats=5,
         random_state=SEED,
         scoring="neg_root_mean_squared_error",
     )
@@ -196,9 +196,16 @@ def run_qb_epa_experiment(spark):
 
             mlflow.log_metrics({"best_rmse": best_rmse})
 
-        # I log gain-based feature importances on the best child run for this
-        # model type. For Ridge this is absolute coefficients; for XGBoost this
-        # is gain over the selected features only (see QBEpaModel.get_feature_importances).
+            # I reopen the best child run while the parent is still active so
+            # Databricks has not yet finalized it. Using nested=True appends to
+            # the existing child run rather than creating a new one.
+            if model_type == "xgboost":
+                with mlflow.start_run(run_id=best_run_id, nested=True):
+                    _log_permutation_importance(best_model, X_test, y_test)
+                    _log_qb_residuals(best_model, X_test, y_test, passer_name_test)
+
+        # I log gain-based feature importances on the best child run after the
+        # parent closes. This matches the pattern used in the WP experiment.
         feature_names, importances = best_model.get_feature_importances()
         log_feature_importance(best_run_id, feature_names, importances)
         print(f"\n[qb_epa_{model_type}] Best RMSE: {best_rmse:.4f} | run_id: {best_run_id}\n")
@@ -208,13 +215,6 @@ def run_qb_epa_experiment(spark):
             best_xgb_model  = best_model
 
         results.append((best_run_id, best_rmse))
-
-    # I reopen the best XGBoost child run once to log the two artifacts that
-    # require the full test set. I do this outside the parent run context so
-    # MLflow does not treat them as nested artifacts of the parent.
-    with mlflow.start_run(run_id=best_xgb_run_id):
-        _log_permutation_importance(best_xgb_model, X_test, y_test)
-        _log_qb_residuals(best_xgb_model, X_test, y_test, passer_name_test)
 
     # I register the best XGBoost model in the Unity Catalog Model Registry
     # and tag it @champion so downstream consumers can load it by alias without
