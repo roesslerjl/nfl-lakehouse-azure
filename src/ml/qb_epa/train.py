@@ -3,6 +3,7 @@ import pandas as pd
 import mlflow
 import mlflow.sklearn
 from mlflow import MlflowClient
+from mlflow.models import infer_signature
 from sklearn.inspection import permutation_importance
 from shared.features import load_mart_plays, get_qb_epa_features
 from shared.mlflow_utils import get_or_create_experiment, log_feature_importance
@@ -162,7 +163,12 @@ def run_qb_epa_experiment(spark):
                 ) as child_run:
                     mlflow.log_params({**{"model_type": model_type}, **clean_params})
                     mlflow.log_metrics(fit_summary)
-                    mlflow.sklearn.log_model(model.pipeline, "model")
+                    # UC Model Registry requires a signature on every logged model.
+                    # I infer it from the training data so UC knows the exact input
+                    # and output schema without having to inspect the artifact at
+                    # registration time (see the MlflowException we hit without this).
+                    signature = infer_signature(X_train, model.predict(X_train))
+                    mlflow.sklearn.log_model(model.pipeline, "model", signature=signature)
 
                     # mlflow.evaluate() with model_type="regressor" automatically
                     # logs RMSE, MAE, and R2 as structured metrics in the MLflow UI.
