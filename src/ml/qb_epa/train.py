@@ -6,7 +6,7 @@ from mlflow import MlflowClient
 from mlflow.models import infer_signature
 from sklearn.inspection import permutation_importance
 from shared.features import load_mart_plays, get_qb_epa_features
-from shared.mlflow_utils import get_or_create_experiment, log_feature_importance
+from shared.mlflow_utils import get_or_create_experiment
 from qb_epa.model import QBEpaModel
 from ml_config import (
     RIDGE_QB_PARAM_GRID, XGBOOST_QB_PARAM_GRID, SEED,
@@ -194,20 +194,21 @@ def run_qb_epa_experiment(spark):
                     best_run_id = child_run.info.run_id
                     best_model  = model
 
+            # I log all best-model artifacts directly on the parent run while it
+            # is still active. Databricks finalizes child runs immediately when
+            # their context closes, so reopening them is not reliable. The parent
+            # run is the right home for experiment-level summary artifacts anyway.
             mlflow.log_metrics({"best_rmse": best_rmse})
-
-            # I reopen the best child run while the parent is still active so
-            # Databricks has not yet finalized it. Using nested=True appends to
-            # the existing child run rather than creating a new one.
+            feature_names, importances = best_model.get_feature_importances()
+            fi_df = (pd.DataFrame({"feature": feature_names, "importance": importances})
+                     .sort_values("importance", ascending=False)
+                     .head(20)
+                     .reset_index(drop=True))
+            mlflow.log_text(fi_df.to_csv(index=False), "feature_importance.csv")
             if model_type == "xgboost":
-                with mlflow.start_run(run_id=best_run_id, nested=True):
-                    _log_permutation_importance(best_model, X_test, y_test)
-                    _log_qb_residuals(best_model, X_test, y_test, passer_name_test)
+                _log_permutation_importance(best_model, X_test, y_test)
+                _log_qb_residuals(best_model, X_test, y_test, passer_name_test)
 
-        # I log gain-based feature importances on the best child run after the
-        # parent closes. This matches the pattern used in the WP experiment.
-        feature_names, importances = best_model.get_feature_importances()
-        log_feature_importance(best_run_id, feature_names, importances)
         print(f"\n[qb_epa_{model_type}] Best RMSE: {best_rmse:.4f} | run_id: {best_run_id}\n")
 
         if model_type == "xgboost":
