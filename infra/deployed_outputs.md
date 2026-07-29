@@ -7,14 +7,14 @@ To update this file after any infrastructure change.
 |---|---|
 | Resource Group | `rg-nfl-lakehouse` |
 | Location | `southcentralus` |
-| Storage Account | `nfllakehousestorage` |
+| Storage Account | `nfllakehousedsastorage` |
 | Storage Container | `lakehouse` |
-| Key Vault | `nfllakehouse-kv` |
-| Databricks Workspace URL | `adb-7405614832902513.13.azuredatabricks.net` |
-| ADLS Bronze Path | `abfss://lakehouse@nfllakehousestorage.dfs.core.windows.net/bronze` |
-| ADLS Silver Path | `abfss://lakehouse@nfllakehousestorage.dfs.core.windows.net/silver` |
-| ADLS Gold Path | `abfss://lakehouse@nfllakehousestorage.dfs.core.windows.net/gold` |
-| SQL Warehouse HTTP Path | `/sql/1.0/warehouses/e23f37ca1e706f17` |
+| Key Vault | `nfllakehousedsa-kv` |
+| Databricks Workspace URL | `adb-7405616724440975.15.azuredatabricks.net` |
+| ADLS Bronze Path | `abfss://lakehouse@nfllakehousedsastorage.dfs.core.windows.net/bronze` |
+| ADLS Silver Path | `abfss://lakehouse@nfllakehousedsastorage.dfs.core.windows.net/silver` |
+| ADLS Gold Path | `abfss://lakehouse@nfllakehousedsastorage.dfs.core.windows.net/gold` |
+| SQL Warehouse HTTP Path | `/sql/1.0/warehouses/667c0bf71cc65550` |
 
 ## dbt Connection Profile
 

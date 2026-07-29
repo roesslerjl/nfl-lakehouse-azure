@@ -183,3 +183,97 @@ Running log of build sessions. Updated after every session.
   - Metrics: EPA/dropback, CPOE, pressure rate faced, EPA under pressure, deep ball rate/EPA, avg time to throw
   - Filters: season, week (game level), QB name, pass_length, down
 - Pages 3-5: Player Explorer, Situational Tendencies, Drive Efficiency
+
+---
+
+## 2026-05-21 / 2026-05-23
+
+### What I did
+
+**Phase 5 — Dashboard (Pages 2 & 3)**
+- Built Page 2 — QB Deep Dive:
+  - Dual-axis bar chart: EPA/dropback (bar) and CPOE (line) per QB, season-filtered
+  - Stats table: EPA/dropback, CPOE, pressure rate faced, EPA under pressure, deep ball rate, deep ball EPA, avg time to throw
+  - `HAVING count(*) > 100` filter to exclude QBs with too few dropbacks to be meaningful
+  - Season filter wired to both widgets
+- Built Page 3 — Player Performance Explorer:
+  - Scatter plot: EPA/play (x) vs. yards/play (y), colored by position, sized by play count
+  - Player detail table with season-level stats (EPA, yards, success rate, plays)
+  - Filters: season, position group (pass/run), player name
+  - Deduplication issue: Caleb Williams appeared twice (one row as passer, one as rusher in mart_player_season). Resolved by filtering scatter to primary role or using `WHERE role = 'passer'` depending on the selected position group
+
+**Phase 6 — ML Experiments scaffold**
+- Rebuilt `src/ml/` from scratch in a production-grade structure with a per-experiment subfolder per experiment:
+  ```
+  src/ml/
+  ├── ml_config.py                   # all constants, feature lists, param grids, experiment paths
+  ├── shared/
+  │   ├── features.py                # data loading + train/test split per experiment
+  │   ├── preprocessing.py           # sklearn ColumnTransformer builders, RareCategoryGrouper
+  │   └── mlflow_utils.py            # get_or_create_experiment, log_run, log_feature_importance
+  ├── win_probability/
+  │   ├── model.py                   # WinProbabilityModel class wrapping sklearn Pipeline
+  │   └── train.py                   # grid search + mlflow.evaluate() + mlflow.log_table()
+  ├── qb_epa/                        # (next)
+  └── play_clustering/               # (next)
+  ```
+- Built `ml_config.py` — single source of truth for all feature lists, target columns, param grids, and MLflow experiment paths. Named `ml_config.py` (not `config.py`) to avoid shadowing the root `config/` package
+- Built `shared/features.py` — `load_mart_plays()`, `get_wp_features()`, `get_qb_epa_features()`, `get_clustering_features()`
+- Built `shared/preprocessing.py`:
+  - `RareCategoryGrouper` custom transformer — collapses infrequent categories into "Other" before OHE (min_freq=0.02)
+  - `build_wp_preprocessor()` — numeric-only ColumnTransformer
+  - `build_qb_epa_preprocessor()` — numeric + per-column categorical transformers
+  - `build_clustering_preprocessor()` — returns (preprocessor, X_combined) for unsupervised pipeline
+- Built `shared/mlflow_utils.py` — `get_or_create_experiment()`, `log_run()`, `log_feature_importance()`
+- Built `win_probability/model.py` — `WinProbabilityModel` class:
+  - Wraps full sklearn Pipeline (preprocessor + estimator) so the logged artifact is self-contained
+  - Supports `"logreg"` and `"xgboost"` model types
+  - `fit()` builds and trains pipeline; `predict_proba()`, `get_fit_summary()`, `get_feature_importances()` as public interface
+- Built `win_probability/train.py` — production-grade grid search:
+  - Parent/child MLflow run hierarchy: one parent per model type, one child per hyperparameter combo
+  - `mlflow.evaluate()` for structured evaluation tables (ROC AUC, accuracy, confusion matrix logged automatically)
+  - `mlflow.log_table()` for per-prediction error table (predicted proba, label, correct flag) — enables post-hoc error analysis by game situation
+  - Best model's feature importance logged as CSV artifact on the best child run
+
+**Silver schema update for posteam_won**
+- Added `posteam_won` derived column to `transform_pbp.py`:
+  - Derives `home_won` from `result > 0`, `posteam_is_home` from `posteam == home_team`
+  - Combines to `posteam_won = (posteam_is_home & home_won) | (~posteam_is_home & ~home_won)` → cast to int8
+  - `result` and `home_team` dropped after derivation (not in final Silver schema)
+- Re-uploaded refreshed Silver Parquet to ADLS Gen2
+- Deleted stale `_delta_log` before reconverting to Delta — required because Databricks caches the old transaction log schema
+- Dropped and recreated Silver table in Unity Catalog to force schema refresh
+- Restarted SQL Warehouse to clear metadata cache (Serverless caches table schema at connection time)
+- Updated dbt models to pass through `posteam_won`:
+  - `stg_pbp.sql` — changed from `SELECT *` to explicit column list including `posteam_won`
+  - `int_plays_enriched.sql` — added to passthrough columns
+  - `mart_plays.sql` — added in Game Outcome section
+- Ran `dbt run` — all 10 models rebuilt successfully with `posteam_won` in `mart_plays`
+
+**Running the WP experiment in Databricks**
+- Connected GitHub repo via Databricks Git Folders (Repos)
+- Added `%pip install xgboost` cell at top of training notebook — xgboost not pre-installed on Serverless
+- Added `%restart_python` cell after pip installs to clear module cache between runs
+- Confirmed `sys.path` pointed to Git folder (not Drafts) before importing project modules
+- Ran full WP grid search: 4 logistic regression variants + 8 XGBoost variants = 12 child runs logged
+- WP XGBoost best AUC: ~0.84 — strong binary classifier
+
+### What I learned
+- Databricks Serverless SQL Warehouse caches `SELECT *` expansion at view-creation time, not query time — adding a column to Silver and rebuilding the view is not enough. Must use an explicit column list in `stg_pbp.sql` to force the new column through
+- `_delta_log` must be deleted before calling `DeltaTable.convertToDelta()` after a Silver Parquet rebuild — otherwise Databricks finds the existing log and uses its stale schema
+- SQL Warehouse metadata cache persists after table DROP+CREATE — must stop/restart the warehouse to clear it
+- `posteam_won` should be a binary target (posteam_won=1/0) not continuous WP regression — the WP column in the dataset is a pre-built surrogate from nflfastR, so building another surrogate is circular. Predicting the actual game outcome (who won?) is the real analytical question
+- `posteam_won` is a float64 in Parquet (Delta stores int8, Parquet round-trips differ) — must cast to int before training or sklearn raises `ValueError: Unknown label type continuous`
+- MLflow experiment names must be absolute Databricks workspace paths (`/Users/<email>/experiment_name`) — relative names cause silent experiment creation failures
+- `config.py` name collides with root `config/` package — `from config import X` picks up the package, not the file. Renamed to `ml_config.py`
+- `mlflow.evaluate()` logs ROC AUC, accuracy, precision, recall, and a confusion matrix automatically when `model_type="classifier"` — no manual metric logging needed beyond fit diagnostics
+- `mlflow.log_table()` logs a DataFrame as a JSON artifact, queryable in the MLflow UI "Evaluation" tab — enables filtering predictions by game situation to understand where the model struggles
+- Parent/child run hierarchy: `mlflow.start_run(nested=True)` inside another active run creates a child run. Parent summarizes the experiment; children capture individual hyperparameter combos. MLflow UI renders this as an expandable tree
+- Feature selection not needed for WP (7 features, all signal) — deferred to QB EPA where sparse NGS columns (time_to_throw, intended_air_yards, defense_coverage_type) may add noise
+
+### What's next
+- Phase 7 — QB EPA experiment:
+  - `qb_epa/model.py` — XGBoost regressor with SelectFromModel feature selection step in pipeline
+  - `qb_epa/train.py` — same parent/child run structure; log permutation importance as artifact
+  - Coverage audit showed 9 usable coverage types, only ~125 null pass plays out of ~60k — much better than the original EDA 55% null estimate (those nulls were from non-pass plays)
+- Pages 4-5 of dashboard (Situational Tendencies, Drive Efficiency) — can be done in parallel with ML
