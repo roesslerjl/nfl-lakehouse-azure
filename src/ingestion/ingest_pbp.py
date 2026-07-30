@@ -1,3 +1,7 @@
+# SUPERSEDED by src/ingestion/land_pbp.py (Jul 2026).
+# Retained only because transform_pbp.py still reads its local output.
+# Remove once the Silver transform is ported to PySpark. See ADR-021
+
 import nfl_data_py as nfl
 import pandas as pd
 import logging
