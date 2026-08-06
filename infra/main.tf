@@ -12,6 +12,11 @@ terraform {
       source  = "databricks/databricks"
       version = "~> 1.0"
     }
+    # Time is required for timeout requests
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.11"
+    }
   }
 }
 

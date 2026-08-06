@@ -30,3 +30,8 @@ variable "project_name" {
   type        = string
   default     = "nfllakehouse"
 }
+
+variable "catalog_name" {
+  type    = string
+  default = "nfl_lakehouse"   # Databricks recommended standard convention: {environment}.{team_name or domain_name}.{asset_name}
+}
